@@ -36,13 +36,15 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;p
 <main>
 <section>
   <h2>1 · Modelo</h2>
-  <div class="row"><select id="tpl" style="flex:1;min-width:200px"></select><button id="add">+ Novo modelo</button></div>
+  <div class="row"><select id="tpl" style="flex:1;min-width:200px"></select><button id="add">+ Novo modelo</button><button id="exp">Exportar modelos</button></div>
+  <div class="hint" id="shh">Modelos criados aqui ficam salvos só neste navegador. Para toda a equipe ver, use <b>Exportar modelos</b> e suba o arquivo <b>modelos.json</b> no GitHub, na mesma pasta do index.html.</div>
   <div class="msg" id="txt"></div>
   <div class="cols" id="cols"></div>
   <div class="new" id="form">
     <input id="nn" placeholder="Nome do modelo (ex.: Plantão fim de semana)">
+    <div><label>Importar colunas de um CSV de modelo (opcional)</label><input id="nf" type="file" accept=".csv,text/csv"><div class="hint" id="nfh"></div></div>
     <input id="nv" type="number" min="0" max="20" value="2" placeholder="Qtd. de variáveis">
-    <textarea id="nt" style="min-height:90px" placeholder="Texto do modelo (use {{1}}, {{2}}...)"></textarea>
+    <textarea id="nt" style="min-height:90px" placeholder="Texto do modelo (opcional, use {{1}}, {{2}}...)"></textarea>
     <div class="row"><button class="p" id="save">Salvar modelo</button><button id="cancel">Cancelar</button></div>
   </div>
 </section>
@@ -67,16 +69,16 @@ const DEF=[
 {n:"Santana de Parnaíba",l:[],h:["Nome","Telefone","Username"],t:"Modelo sem variáveis: usa apenas os telefones."}
 ];
 const $=id=>document.getElementById(id);
-let custom=[],rows=[],vals={};
+let custom=[],shared=[],pend=null,rows=[],vals={};
 try{custom=JSON.parse(localStorage.getItem("bng_tpls")||"[]")}catch(e){}
-const all=()=>DEF.concat(custom);
+const all=()=>DEF.concat(shared,custom);const base=()=>DEF.length+shared.length;
 function persist(){try{localStorage.setItem("bng_tpls",JSON.stringify(custom))}catch(e){}}
 function renderTpl(sel){
   const a=all();const prev=$("tpl").value;
   $("tpl").innerHTML=a.map((t,i)=>`<option value="${i}">${t.n.replace(/</g,"&lt;")}</option>`).join("");
   $("tpl").value=sel!=null?sel:(prev||"0");
   const t=a[+$("tpl").value];$("txt").textContent=t.t;$("cols").textContent=t.h.join(";");
-  $("del").style.display=+$("tpl").value>=DEF.length?"":"none";
+  $("del").style.display=+$("tpl").value>=base()?"":"none";
   renderVars();renderRows();
 }
 function idx(t){return t.h.map((h,i)=>i).filter(i=>!(i==2&&$("nu").checked))}
@@ -174,12 +176,43 @@ $("add").onclick=()=>$("form").classList.toggle("on");
 $("cancel").onclick=()=>$("form").classList.remove("on");
 $("save").onclick=()=>{
   const n=$("nn").value.trim(),t=$("nt").value.trim(),v=Math.max(0,Math.min(20,+$("nv").value||0));
-  if(!n||!t)return;
-  const h=["Nome","Telefone","Username"];for(let i=1;i<=v;i++)h.push("{{"+i+"}}");
-  custom.push({n,h,t});persist();$("form").classList.remove("on");
+  if(!n)return;
+  if(all().some(x=>x.n.toLowerCase()==n.toLowerCase())){alert("Já existe um modelo com esse nome.");return}
+  let h,l;
+  if(pend){h=pend.slice();l=h.slice(3).map(x=>/^\{\{\d+\}\}$/.test(x)?"":x)}
+  else{h=["Nome","Telefone","Username"];for(let i=1;i<=v;i++)h.push("{{"+i+"}}");l=[]}
+  custom.push({n,h,l,t:t||"(texto da mensagem não informado)"});pend=null;$("nf").value="";$("nfh").textContent="";persist();$("form").classList.remove("on");
   $("nn").value=$("nt").value="";renderTpl(all().length-1);
 };
-$("del").onclick=()=>{const i=+$("tpl").value-DEF.length;if(i>=0&&confirm("Excluir este modelo?")){custom.splice(i,1);persist();renderTpl(0)}};
+$("del").onclick=()=>{const i=+$("tpl").value-base();if(i>=0&&confirm("Excluir este modelo?")){custom.splice(i,1);persist();renderTpl(0)}};
+$("nf").onchange=()=>{
+  const f=$("nf").files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    const line=String(r.result).replace(/^\ufeff/,"").split(/\r?\n/)[0]||"";
+    const d=line.includes(";")?";":",";
+    let h=line.split(d).map(x=>x.trim().replace(/^"|"$/g,"")).filter((x,i,a)=>x||i<a.length-1);
+    if(h.length<2||h[0].toLowerCase()!="nome"||h[1].toLowerCase()!="telefone"){pend=null;$("nfh").textContent="Cabeçalho não reconhecido: a 1ª e 2ª colunas devem ser Nome e Telefone.";return}
+    if((h[2]||"").toLowerCase()!="username")h.splice(2,0,"Username");
+    pend=h;$("nv").value=Math.max(0,h.length-3);
+    if(!$("nn").value.trim())$("nn").value=f.name.replace(/\.csv$/i,"").replace(/[_]+/g," ").trim();
+    $("nfh").textContent="Colunas lidas: "+h.join(";");
+  };
+  r.readAsText(f,"utf-8");
+};
+$("exp").onclick=()=>{
+  const list=shared.concat(custom);
+  if(!list.length){alert("Ainda não há modelos criados para exportar.");return}
+  save(new Blob([JSON.stringify(list,null,2)],{type:"application/json"}),"modelos.json");
+};
+fetch("modelos.json?v="+Date.now()).then(r=>r.ok?r.json():[]).then(a=>{
+  if(Array.isArray(a)){
+    const names=new Set(DEF.map(x=>x.n.toLowerCase()));
+    shared=a.filter(x=>x&&x.n&&Array.isArray(x.h)&&!names.has(x.n.toLowerCase()));
+    custom=custom.filter(x=>!shared.some(y=>y.n.toLowerCase()==x.n.toLowerCase()));
+    renderTpl();
+  }
+}).catch(()=>{});
 renderTpl(0);
 </script>
 </body>
