@@ -1,0 +1,44 @@
+[
+  {
+    "n": "captação 2",
+    "h": [
+      "Name",
+      "Phone",
+      "Username",
+      "{{1}}",
+      "{{2}}"
+    ],
+    "k": [
+      "nome",
+      "tel",
+      "user",
+      "var",
+      "var"
+    ],
+    "l": [
+      "",
+      ""
+    ],
+    "t": "🥼 VAGAS DE {{1}} Local: • {{2}}. 📌 Possibilidade de fixo Posso te enviar mais informações?"
+  },
+  {
+    "n": "teste",
+    "h": [
+      "Nome",
+      "Telefone",
+      "Username",
+      "{{1}}"
+    ],
+    "k": [
+      "nome",
+      "tel",
+      "user",
+      "var"
+    ],
+    "d": ";",
+    "l": [
+      ""
+    ],
+    "t": "(texto da mensagem não informado)"
+  }
+]
